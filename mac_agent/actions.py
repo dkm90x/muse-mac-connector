@@ -143,11 +143,16 @@ def execute(action: str, params: dict, cfg: dict) -> dict:
         if action == "shell.script":
             return shell_script(params.get("name", ""), cfg["scripts_dir"])
 
-        # Import lazily to avoid a circular import: operator_actions uses _within_roots.
+        # Import lazily to keep the base agent lightweight and avoid circular imports.
         from .operator_actions import execute_operator
         operator_result = execute_operator(action, params, cfg)
         if operator_result is not None:
             return operator_result
+
+        from .ui_actions import execute_ui
+        ui_result = execute_ui(action, params, cfg)
+        if ui_result is not None:
+            return ui_result
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"action failed: {exc}"}
     return {"ok": False, "error": "unknown action"}
