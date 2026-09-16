@@ -142,6 +142,12 @@ def execute(action: str, params: dict, cfg: dict) -> dict:
             return system_open_url(params.get("url", ""))
         if action == "shell.script":
             return shell_script(params.get("name", ""), cfg["scripts_dir"])
+
+        # Import lazily to avoid a circular import: operator_actions uses _within_roots.
+        from .operator_actions import execute_operator
+        operator_result = execute_operator(action, params, cfg)
+        if operator_result is not None:
+            return operator_result
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"action failed: {exc}"}
     return {"ok": False, "error": "unknown action"}

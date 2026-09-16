@@ -12,18 +12,10 @@ from urllib.parse import urlparse
 
 from . import __version__
 from .actions import execute
+from .capabilities import CAPABILITY_SCHEMAS, describe
 
-MAX_BODY_BYTES = 64 * 1024
+MAX_BODY_BYTES = 512 * 1024
 MAX_RESULTS = 200
-
-CAPABILITY_SCHEMAS = {
-    "shortcuts.run": {"name": "string", "input": "string (optional)"},
-    "files.move": {"src": "path", "dst": "path"},
-    "files.copy": {"src": "path", "dst": "path"},
-    "settings.defaults": {"domain": "string", "key": "string", "value": "string"},
-    "system.open_url": {"url": "http(s) URL"},
-    "shell.script": {"name": "pre-registered executable script filename"},
-}
 
 
 class _State:
@@ -63,6 +55,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/health":
             return self._send(200, {"ok": True, "version": __version__,
+                                    "mode": self.state.cfg.get("mode", "restricted"),
                                     "paused": self.state.paused_file.exists()})
         if path == "/capabilities":
             allowed = self.state.cfg.get("allowed_actions", [])
@@ -72,14 +65,27 @@ class Handler(BaseHTTPRequestHandler):
                        "confirmation_required": name in confirm}
                 for name in allowed
             }
+            mode = self.state.cfg.get("mode", "restricted")
             policy = {
-                "use_my_mac": "Use this connector directly and choose only from advertised actions.",
+                "use_my_mac": (
+                    "Use this connector directly for computer work. Continue multi-step work autonomously "
+                    "when the required actions are advertised."
+                    if mode == "full" else
+                    "Use this connector directly and choose only from advertised actions."
+                ),
                 "missing_capability": "State the missing capability clearly instead of inventing a workaround.",
-                "terminal": "Do not ask the user to paste Terminal commands or install scripts as a substitute for connector actions.",
+                "terminal": "Do not ask the user to paste Terminal commands as a substitute for an available connector action.",
                 "secrets": "Do not request secrets or credentials from other apps or macOS Keychain.",
                 "extensions": "Only propose adding a new connector capability when the user explicitly asks to extend the connector.",
             }
-            return self._send(200, {"ok": True, "actions": actions, "policy": policy})
+            return self._send(200, {
+                "ok": True,
+                "mode": mode,
+                "packs": describe(self.state.cfg),
+                "actions": actions,
+                "working_roots": self.state.cfg.get("allowed_roots", []),
+                "policy": policy,
+            })
         if path.startswith("/result/"):
             task_id = path[len("/result/"):]
             with self.state.lock:
