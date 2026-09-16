@@ -53,6 +53,7 @@ class ConnectorApp(rumps.App):
             None,
             rumps.MenuItem("Start Connector", callback=self.start_connector),
             rumps.MenuItem("Stop Connector", callback=self.stop_connector),
+            rumps.MenuItem("Restart Tunnel", callback=self.restart_tunnel),
             rumps.MenuItem("Copy Tunnel URL", callback=self.copy_url),
             None,
             rumps.MenuItem("Pause Agent", callback=self.toggle_pause),
@@ -196,6 +197,14 @@ class ConnectorApp(rumps.App):
         self._clear_access_key_later()
         self._notify("Access key copied for 60 seconds. Paste it only into Muse's secure field.")
 
+    def restart_tunnel(self, _):
+        self.tunnel.stop()
+        if self.agent.is_running(self.token) and self.tunnel.start():
+            self._notify("Tunnel restarting. A new Quick Tunnel URL will be created.")
+        else:
+            self._notify("Tunnel restart failed. Check the agent log.")
+        self._refresh()
+
     def copy_url(self, _):
         if not self.tunnel.public_url:
             self._notify("No tunnel URL yet.")
@@ -220,6 +229,8 @@ class ConnectorApp(rumps.App):
 
     @rumps.timer(5)
     def _tick(self, _):
+        # Recover automatically if the local agent or cloudflared process exits.
+        self._ensure_services()
         self._refresh()
 
 

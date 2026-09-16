@@ -17,7 +17,7 @@ def source_files():
             continue
         if not path.is_file() or path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
-        if any(part in {".git", ".venv", "__pycache__"} for part in path.parts):
+        if any(part in {".git", ".venv", "__pycache__", "build", "dist"} for part in path.parts):
             continue
         yield path
 

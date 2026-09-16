@@ -8,6 +8,8 @@ import signal
 import subprocess
 import threading
 import time
+import sys
+from pathlib import Path
 
 from . import config
 
@@ -26,8 +28,20 @@ class TunnelManager:
             self._restore_url()
 
     @staticmethod
-    def installed() -> bool:
-        return shutil.which("cloudflared") is not None
+    def cloudflared_path() -> str | None:
+        """Find a bundled cloudflared first, then common local installs/PATH."""
+        if getattr(sys, "frozen", False):
+            bundled = Path(sys.executable).resolve().parents[1] / "Resources" / "cloudflared"
+            if bundled.is_file() and os.access(bundled, os.X_OK):
+                return str(bundled)
+        for candidate in ("/opt/homebrew/bin/cloudflared", "/usr/local/bin/cloudflared"):
+            if Path(candidate).is_file() and os.access(candidate, os.X_OK):
+                return candidate
+        return shutil.which("cloudflared")
+
+    @classmethod
+    def installed(cls) -> bool:
+        return cls.cloudflared_path() is not None
 
     def _read_pid(self) -> int | None:
         try:
@@ -73,7 +87,7 @@ class TunnelManager:
         log_file = open(self.log_path, "w")
         try:
             self.proc = subprocess.Popen(
-                ["cloudflared", "tunnel", "--url", f"http://127.0.0.1:{config.AGENT_PORT}"],
+                [self.cloudflared_path(), "tunnel", "--url", f"http://127.0.0.1:{config.AGENT_PORT}"],
                 stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True,
             )
         except FileNotFoundError:

@@ -52,24 +52,49 @@ class AgentManager:
             return False
 
     def is_running(self, token: str = "") -> bool:
-        if self.proc is not None and self.proc.poll() is None:
-            return True
         token = token or config.ensure_agent_token()
         return self._health(token)
+
+    def _stop_stale_process(self) -> None:
+        pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else self._read_pid()
+        if pid and self._pid_is_agent(pid):
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                time.sleep(0.2)
+            except (ProcessLookupError, PermissionError):
+                pass
+        self.proc = None
 
     def start(self, token: str = "") -> bool:
         token = token or config.ensure_agent_token()
         if self.is_running(token):
             return True
+        self._stop_stale_process()
 
         env = dict(os.environ)
         env["MAC_AGENT_TOKEN"] = token
-        repo_root = str(Path(__file__).resolve().parents[1])
-        env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+        python_bin = sys.executable
+
+        if getattr(sys, "frozen", False):
+            # Packaged app: use the bundled Python helper so the HTTP service is
+            # isolated from the menu-bar event loop but remains self-contained.
+            contents = Path(sys.executable).resolve().parents[1]
+            python_bin = str(contents / "MacOS" / "python")
+            resources = contents / "Resources"
+            lib_root = resources / "lib"
+            python_dirs = sorted(p for p in lib_root.glob("python3.*") if p.is_dir())
+            paths = [str(resources / "lib" / "python312.zip")]
+            if python_dirs:
+                paths.insert(0, str(python_dirs[-1]))
+            env["PYTHONPATH"] = os.pathsep.join(paths)
+        else:
+            repo_root = str(Path(__file__).resolve().parents[1])
+            env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+
         log_file = open(self.log_path, "a")
         try:
             self.proc = subprocess.Popen(
-                [sys.executable, "-m", config.AGENT_MODULE, "--http"],
+                [python_bin, "-m", config.AGENT_MODULE, "--http"],
                 stdout=log_file, stderr=subprocess.STDOUT, env=env,
                 start_new_session=True,
             )

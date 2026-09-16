@@ -12,3 +12,7 @@ config.yaml
 access-key
 *.pem
 *.key
+build/
+dist/
+assets/AppIcon.iconset/
+assets/AppIcon.icns
