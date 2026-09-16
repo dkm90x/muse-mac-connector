@@ -97,7 +97,8 @@ def enable_packs(packs: list[str], path: str | None = None) -> dict:
                 selected.append(pack)
         cfg["mode"] = "restricted"
         cfg["enabled_packs"] = selected
-        cfg["allowed_actions"] = actions_for_packs(selected)
+        added = actions_for_packs(packs)
+        cfg["allowed_actions"] = list(dict.fromkeys([*cfg.get("allowed_actions", []), *added]))
         cfg["confirm_actions"] = list(cfg["allowed_actions"])
     save_config(cfg, path)
     return load_config(path)
