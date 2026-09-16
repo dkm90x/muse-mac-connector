@@ -4,6 +4,7 @@ from pathlib import Path
 
 from mac_agent.capabilities import FULL_OPERATOR_PACKS, actions_for_packs
 from mac_agent.operator_actions import files_read, files_write, shell_exec
+from mac_agent.ui_actions import ui_key
 
 
 class OperatorTests(unittest.TestCase):
@@ -12,6 +13,7 @@ class OperatorTests(unittest.TestCase):
         for expected in {
             "files.list", "files.read", "files.write", "files.mkdir",
             "shell.exec", "process.start", "process.output", "app.open", "clipboard.write",
+            "screen.capture", "ui.frontmost", "ui.click", "ui.type", "ui.key",
         }:
             self.assertIn(expected, actions)
 
@@ -45,6 +47,16 @@ class OperatorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
             result = shell_exec(["echo", "hello"], outside, [root])
             self.assertFalse(result["ok"])
+
+    def test_ui_key_rejects_unknown_named_key_without_touching_os(self):
+        result = ui_key("definitely-not-a-key")
+        self.assertFalse(result["ok"])
+        self.assertIn("supported", result["error"])
+
+    def test_ui_key_rejects_unknown_modifier_without_touching_os(self):
+        result = ui_key("x", ["superpower"])
+        self.assertFalse(result["ok"])
+        self.assertIn("modifier", result["error"])
 
 
 if __name__ == "__main__":
