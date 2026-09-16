@@ -28,6 +28,14 @@ PACKS = {
         "description": "Read and write the current user's clipboard.",
         "actions": ["clipboard.read", "clipboard.write"],
     },
+    "screen": {
+        "description": "Capture the Mac display for visual inspection. Requires Screen Recording permission.",
+        "actions": ["screen.capture"],
+    },
+    "ui": {
+        "description": "Inspect and operate the visible Mac UI. Requires Accessibility permission.",
+        "actions": ["ui.frontmost", "ui.activate", "ui.click", "ui.type", "ui.key"],
+    },
     "shortcuts": {
         "description": "Run Apple Shortcuts by name.",
         "actions": ["shortcuts.run"],
@@ -64,6 +72,12 @@ CAPABILITY_SCHEMAS = {
     "app.open": {"name": "application name"},
     "clipboard.read": {},
     "clipboard.write": {"text": "string"},
+    "screen.capture": {"display": "int (optional)", "include_base64": "bool (optional)"},
+    "ui.frontmost": {},
+    "ui.activate": {"name": "application name"},
+    "ui.click": {"x": "int", "y": "int"},
+    "ui.type": {"text": "string"},
+    "ui.key": {"key": "return|tab|escape|delete|space|up|down|left|right|home|end|pageup|pagedown", "modifiers": "array (optional)"},
     "shortcuts.run": {"name": "string", "input": "string (optional)"},
     "settings.defaults": {"domain": "string", "key": "string", "value": "string"},
     "system.open_url": {"url": "http(s) URL"},
