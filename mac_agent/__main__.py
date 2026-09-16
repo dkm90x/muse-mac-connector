@@ -35,6 +35,8 @@ def _doctor(cfg: dict) -> int:
         "pbcopy": shutil.which("pbcopy"),
         "pbpaste": shutil.which("pbpaste"),
         "shortcuts": shutil.which("shortcuts"),
+        "screencapture": shutil.which("screencapture") or ("/usr/sbin/screencapture" if Path("/usr/sbin/screencapture").exists() else None),
+        "osascript": shutil.which("osascript") or ("/usr/bin/osascript" if Path("/usr/bin/osascript").exists() else None),
         "git": shutil.which("git"),
         "node": shutil.which("node"),
         "npm": shutil.which("npm"),
@@ -42,9 +44,16 @@ def _doctor(cfg: dict) -> int:
     print(f"Muse Mac Connector {__version__}")
     print(f"Mode: {cfg.get('mode', 'restricted')}")
     for name, value in checks.items():
-        print(f"{name:<12} {'READY' if value else 'missing'}{f'  {value}' if value else ''}")
+        print(f"{name:<14} {'READY' if value else 'missing'}{f'  {value}' if value else ''}")
+    if sys.platform == "darwin":
+        try:
+            from .ui_actions import accessibility_status
+            access = accessibility_status()
+            print(f"accessibility  {'READY' if access.get('enabled') else 'needs approval'}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"accessibility  check failed  {exc}")
     for root in cfg.get("allowed_roots", []):
-        print(f"root         {'READY' if Path(root).exists() else 'missing'}  {root}")
+        print(f"root           {'READY' if Path(root).exists() else 'missing'}  {root}")
     return 0
 
 
