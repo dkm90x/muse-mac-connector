@@ -1,3 +1,10 @@
+## 0.4.3 — 2026-09-15
+
+- Added a connector behavior contract for AI clients.
+- `GET /capabilities` now includes usage policy alongside action schemas.
+- AI clients are told to use advertised connector actions instead of requesting Terminal installers or setup workarounds.
+- Missing capabilities must be reported explicitly rather than replaced with improvised access methods.
+
 # Changelog
 
 ## v0.4.2 — 2026-09-15

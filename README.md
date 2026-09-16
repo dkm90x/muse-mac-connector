@@ -2,7 +2,7 @@
 
 > **Give Meta Muse hands on your Mac — without giving it unchecked access.**
 
-[![Version](https://img.shields.io/badge/version-0.4.2--alpha-blue)](#status)
+[![Version](https://img.shields.io/badge/version-0.4.3--alpha-blue)](#status)
 [![macOS](https://img.shields.io/badge/platform-macOS-black)](#requirements)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Security](https://img.shields.io/badge/security-local%20approval-important)](SECURITY.md)
@@ -46,11 +46,13 @@ This project is also a practical exploration of agent infrastructure and human-i
 - Building the product so paths, accounts, credentials, and configuration belong to **the person who installs it**, not the developer.
 ## Status
 
-**v0.4.2 alpha — working free/DIY edition.**
+**v0.4.3 alpha — working free/DIY edition.**
 
 The current free edition uses a Cloudflare Quick Tunnel. Quick Tunnel addresses can change after a restart, so the connector always exposes the current connection details and can restart a failed tunnel automatically.
 
 The app now supports a true Finder-style launch: open **Muse Mac Connector.app** and it starts the menu-bar UI, bundled Mac agent helper, and bundled `cloudflared` process automatically.
+
+The connector also publishes a behavior contract through `/capabilities`: when the user says to use the Mac, the AI should use the connector directly, avoid Terminal-install workarounds, and clearly report any missing capability instead of inventing one.
 
 ### Distribution note
 

@@ -95,6 +95,13 @@ class ConnectorApp(rumps.App):
             "- GET /capabilities returns allowed actions and whether confirmation is required.\n"
             "- POST /task with JSON {task_id?, action, params} requests an action.\n"
             "- GET /result/<task_id> retrieves a task result.\n\n"
+            "Behavior contract:\n"
+            "- When I say to use my Mac, use this connector directly.\n"
+            "- Check /capabilities before deciding a Mac task cannot be done.\n"
+            "- Do not ask me to paste Terminal commands, installers, or scripts as a substitute for connector actions.\n"
+            "- Do not request secrets or credentials from other apps or from macOS Keychain.\n"
+            "- If an action is not advertised, state the missing capability instead of inventing a workaround.\n"
+            "- Only propose extending the connector if I explicitly ask for a new capability.\n\n"
             "Use this connector only when I explicitly ask you to work with my Mac."
         )
 

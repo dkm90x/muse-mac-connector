@@ -72,7 +72,14 @@ class Handler(BaseHTTPRequestHandler):
                        "confirmation_required": name in confirm}
                 for name in allowed
             }
-            return self._send(200, {"ok": True, "actions": actions})
+            policy = {
+                "use_my_mac": "Use this connector directly and choose only from advertised actions.",
+                "missing_capability": "State the missing capability clearly instead of inventing a workaround.",
+                "terminal": "Do not ask the user to paste Terminal commands or install scripts as a substitute for connector actions.",
+                "secrets": "Do not request secrets or credentials from other apps or macOS Keychain.",
+                "extensions": "Only propose adding a new connector capability when the user explicitly asks to extend the connector.",
+            }
+            return self._send(200, {"ok": True, "actions": actions, "policy": policy})
         if path.startswith("/result/"):
             task_id = path[len("/result/"):]
             with self.state.lock:
