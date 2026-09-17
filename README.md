@@ -30,10 +30,10 @@ The downloadable build is currently ad-hoc signed, not Apple Developer ID signed
 
 ## What v0.5 can do
 
-When enabled, the capability index exposes 11 capability packs and 25 actions:
+When enabled, the capability index exposes 11 capability packs, 25 operational actions, plus the consent-gated `access.enable_full` authority action:
 
-- **Files:** list, read, write, create folders, move, copy, and trash files inside configured working folders.
-- **Developer commands:** run guarded developer commands without a raw shell interpreter.
+- **Files:** Restricted Mode uses configured roots; Full Computer Mode can list, read, write, create, move, copy, and trash files anywhere the logged-in account can access.
+- **Developer commands:** Restricted Mode uses guarded single-command execution; Full Computer Mode supports general Terminal-style command strings through the user shell, including normal chaining, pipes, and redirection.
 - **Processes:** start, inspect, read output from, and stop long-running processes.
 - **Apps:** launch installed macOS applications.
 - **Clipboard:** read and write the clipboard.
@@ -44,7 +44,7 @@ When enabled, the capability index exposes 11 capability packs and 25 actions:
 - **Scripts:** run executable scripts intentionally placed in the connector scripts folder.
 - **Settings:** change explicitly requested macOS defaults string values.
 
-Muse discovers the machine-readable version at `GET /capabilities`, including parameter schemas, enabled state, confirmation requirements, working roots, and behavior policy.
+Muse discovers the machine-readable version at `GET /capabilities`, including parameter schemas, enabled state, confirmation requirements, actual filesystem/command authority, and behavior policy.
 
 ## Full Computer Mode
 
@@ -54,9 +54,9 @@ The connector starts conservatively. To expose the complete capability index:
 2. Choose **Enable Full Computer Mode**.
 3. Read the explanation and approve it.
 
-Full Computer Mode enables every connector capability pack. It does **not** bypass macOS privacy controls. Accessibility and Screen Recording still require explicit approval in System Settings. Files and developer commands remain bounded to configured working folders, and destructive file trash / settings changes keep a confirmation gate.
+Full Computer Mode removes the connector's configured-folder and conservative-command fences. Muse can work anywhere the logged-in Mac account can access and can run general Terminal-style command workflows. It does **not** bypass macOS privacy or privilege controls: Accessibility, Screen Recording, Automation, Full Disk Access, admin/password prompts, TCC, and SIP still apply. Obvious destructive, privileged, and credential-sensitive operations keep a local approval gate.
 
-You can inspect what is currently available at any time with **Capability Index** in the menu.
+Muse can also request `access.enable_full` itself. Your Mac shows the approval dialog, and approval updates the running helper immediately — no config edit or restart. You can inspect the real live authority at any time with **Capability Index**. See [FULL_COMPUTER_MODE.md](FULL_COMPUTER_MODE.md) for the non-negotiable product contract and release benchmark.
 
 ## Menu-bar controls
 
@@ -94,10 +94,10 @@ The AI runs in the cloud. The actual computer actions run on your Mac. The free 
 - Remote access uses an outbound HTTPS Cloudflare tunnel.
 - Every request requires a randomly generated 256-bit bearer key.
 - The key is stored in the current user's macOS Keychain when available.
-- File operations are bounded to configured roots; defaults are Desktop, Documents, and Downloads.
-- Developer command execution rejects shell chaining/redirection and selected privilege/credential-oriented executables.
-- Full Computer Mode is explicit opt-in.
-- macOS Accessibility and Screen Recording permissions remain under macOS control.
+- Restricted Mode bounds file operations to configured roots and uses conservative command parsing.
+- Full Computer Mode is explicit opt-in and removes those connector authority fences.
+- Full Mode general commands can chain normal shell operations; obvious destructive, privileged, and credential-sensitive commands require local confirmation.
+- macOS Accessibility, Screen Recording, Automation, Full Disk Access, admin/password prompts, TCC, and SIP remain under macOS control.
 - **Pause Agent** immediately blocks new requests.
 - No analytics, telemetry, folder watching, or project-owned backend.
 

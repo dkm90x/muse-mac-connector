@@ -1,11 +1,12 @@
 """Computer-operator actions for Muse Mac Connector.
 
-These actions are intentionally broader than the original alpha actions, but still
-respect configured working roots and avoid invoking a shell interpreter.
+Restricted Mode applies working roots and conservative command parsing. Full Mode
+uses OS-level access and a login shell for command strings.
 """
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -15,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .actions import _within_roots
+from .actions import _within_roots, _path_allowed
 
 MAX_FILE_BYTES = 512 * 1024
 MAX_PROCESS_OUTPUT = 64 * 1024
@@ -25,21 +26,49 @@ BLOCKED_EXECUTABLES = {
 }
 SHELL_META = ("|", ";", "&", ">", "<", "`", "$(", "\n", "\r")
 
+# A visible-command approval heuristic, not a sandbox or a shell security parser.
+# Scan all words so wrappers, pipelines and nested shell strings do not hide obvious risk.
+HIGH_RISK_EXECUTABLES = {
+    "rm", "rmdir", "sudo", "su", "security", "ssh-add", "dscl", "shutdown", "reboot",
+    "halt", "poweroff", "diskutil", "dd", "newfs", "mkfs", "erase", "nvram",
+    "csrutil", "systemsetup", "chown", "chmod", "chflags",
+}
+
+
+def command_requires_confirmation(command) -> bool:
+    if isinstance(command, list):
+        return any(command_requires_confirmation(item) for item in command)
+    if not isinstance(command, str):
+        return False  # The execution parser rejects invalid commands.
+    # Strip shell quoting/escaping for detection only; never change executed text.
+    visible = re.sub(r"[\\\\'\"]", "", command).lower()
+    words = re.findall(r"[a-z0-9_.-]+", visible)
+    if any(word in HIGH_RISK_EXECUTABLES or word.startswith(("mkfs.", "newfs_")) for word in words):
+        return True
+    return bool(re.search(
+        r"\bgit\s+(?:[^;&|\n]*\s)?(?:clean\b|reset\s+--hard\b)|"
+        r"keychains?|(?:^|/)\.ssh(?:/|\b)|(?:^|/)\.aws/credentials|"
+        r"(?:^|/)\.env(?:\b|\.)|\b(?:login\s+data|cookies\.sqlite)\b",
+        visible,
+    ))
+
 _processes: dict[str, dict] = {}
 _process_lock = threading.Lock()
 
 
-def _resolve_allowed(path: str, roots: list[str]) -> Path:
+def _resolve_allowed(path: str, roots: list[str] | None) -> Path:
     expanded = os.path.abspath(os.path.expanduser(path))
-    if not _within_roots(expanded, roots):
+    if not _path_allowed(expanded, roots):
         raise ValueError("path outside allowed roots")
     return Path(expanded)
 
 
-def _argv(command) -> list[str]:
+def _argv(command, full: bool = False) -> list[str]:
     if isinstance(command, str):
         if not command.strip():
             raise ValueError("command is required")
+        if full:
+            return ["/bin/zsh", "-lc", command]
         if any(token in command for token in SHELL_META):
             raise ValueError("shell operators are not supported; pass one command at a time")
         argv = shlex.split(command)
@@ -49,6 +78,8 @@ def _argv(command) -> list[str]:
         raise ValueError("command must be a string or argv array")
     if not argv:
         raise ValueError("command is required")
+    if full:
+        return argv
     executable = os.path.basename(argv[0])
     if executable in BLOCKED_EXECUTABLES:
         raise ValueError(f"command is blocked in operator mode: {executable}")
@@ -58,14 +89,16 @@ def _argv(command) -> list[str]:
     return argv
 
 
-def _validate_command_paths(argv: list[str], roots: list[str]) -> None:
+def _validate_command_paths(argv: list[str], roots: list[str] | None) -> None:
+    if roots is None:
+        return
     for arg in argv[1:]:
         if arg.startswith("/") or arg.startswith("~"):
             if not _within_roots(arg, roots):
                 raise ValueError("absolute command path argument outside allowed roots")
 
 
-def files_list(path: str, roots: list[str], recursive: bool = False, max_entries: int = 200) -> dict:
+def files_list(path: str, roots: list[str] | None, recursive: bool = False, max_entries: int = 200) -> dict:
     try:
         root = _resolve_allowed(path, roots)
         if not root.is_dir():
@@ -87,7 +120,7 @@ def files_list(path: str, roots: list[str], recursive: bool = False, max_entries
         return {"ok": False, "error": str(exc)}
 
 
-def files_read(path: str, roots: list[str], max_bytes: int = MAX_FILE_BYTES) -> dict:
+def files_read(path: str, roots: list[str] | None, max_bytes: int = MAX_FILE_BYTES) -> dict:
     try:
         target = _resolve_allowed(path, roots)
         if not target.is_file():
@@ -105,7 +138,7 @@ def files_read(path: str, roots: list[str], max_bytes: int = MAX_FILE_BYTES) -> 
         return {"ok": False, "error": str(exc)}
 
 
-def files_write(path: str, content: str, roots: list[str], append: bool = False) -> dict:
+def files_write(path: str, content: str, roots: list[str] | None, append: bool = False) -> dict:
     if not isinstance(content, str):
         return {"ok": False, "error": "content must be a string"}
     if len(content.encode("utf-8")) > MAX_FILE_BYTES:
@@ -120,7 +153,7 @@ def files_write(path: str, content: str, roots: list[str], append: bool = False)
         return {"ok": False, "error": str(exc)}
 
 
-def files_mkdir(path: str, roots: list[str]) -> dict:
+def files_mkdir(path: str, roots: list[str] | None) -> dict:
     try:
         target = _resolve_allowed(path, roots)
         target.mkdir(parents=True, exist_ok=True)
@@ -129,7 +162,7 @@ def files_mkdir(path: str, roots: list[str]) -> dict:
         return {"ok": False, "error": str(exc)}
 
 
-def files_trash(path: str, roots: list[str]) -> dict:
+def files_trash(path: str, roots: list[str] | None) -> dict:
     try:
         target = _resolve_allowed(path, roots)
         if not target.exists():
@@ -145,10 +178,10 @@ def files_trash(path: str, roots: list[str]) -> dict:
         return {"ok": False, "error": str(exc)}
 
 
-def shell_exec(command, cwd: str, roots: list[str], timeout: int = 300) -> dict:
+def shell_exec(command, cwd: str, roots: list[str] | None, timeout: int = 300) -> dict:
     try:
         workdir = _resolve_allowed(cwd, roots)
-        argv = _argv(command)
+        argv = _argv(command, full=roots is None)
         _validate_command_paths(argv, roots)
         limit = max(1, min(int(timeout), 900))
         result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, timeout=limit)
@@ -162,10 +195,10 @@ def shell_exec(command, cwd: str, roots: list[str], timeout: int = 300) -> dict:
         return {"ok": False, "error": str(exc)}
 
 
-def process_start(command, cwd: str, roots: list[str], base_dir: str) -> dict:
+def process_start(command, cwd: str, roots: list[str] | None, base_dir: str) -> dict:
     try:
         workdir = _resolve_allowed(cwd, roots)
-        argv = _argv(command)
+        argv = _argv(command, full=roots is None)
         _validate_command_paths(argv, roots)
         with _process_lock:
             running = sum(1 for item in _processes.values() if item["proc"].poll() is None)
@@ -256,7 +289,7 @@ def clipboard_write(text: str) -> dict:
 
 
 def execute_operator(action: str, params: dict, cfg: dict) -> dict | None:
-    roots = cfg.get("allowed_roots", [])
+    roots = None if cfg.get("mode") == "full" else cfg.get("allowed_roots", [])
     if action == "files.list":
         return files_list(params.get("path", ""), roots, bool(params.get("recursive", False)), params.get("max_entries", 200))
     if action == "files.read":

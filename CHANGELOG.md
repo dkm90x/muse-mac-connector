@@ -2,8 +2,9 @@
 
 ## 0.5.0-alpha — 2026-09-16
 
-- Added a shared machine-readable capability registry with 11 packs and 25 actions.
-- Added Full Computer Mode with an explicit user opt-in and bounded working roots.
+- Added a shared machine-readable capability registry with 11 packs, 25 operational actions, and a consent-gated Full Mode access action.
+- Defined Full Computer Mode as user-level Mac authority after explicit local approval: no connector-imposed folder, app, or normal command-workflow fences.
+- Added `access.enable_full` so Muse can request Full Mode from Restricted Mode; approval updates the running helper immediately without restart.
 - Added file read/write/list/mkdir/trash, guarded developer command execution, process supervision, app launch, clipboard, screen capture, and Accessibility UI primitives.
 - Added `muse-mac capabilities`, `muse-mac enable all`, and `muse-mac doctor`.
 - Added first-run plain-language onboarding and a permanent **How to Use — Easy Steps** menu.

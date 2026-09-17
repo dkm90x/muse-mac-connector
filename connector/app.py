@@ -30,7 +30,10 @@ Choose Connect to Muse from the menu if you want the app to open Muse for you.
 4. PASTE
 In Muse, press Command-V and send the copied setup. Muse can then read the connector's capability index and use the Mac tools you have enabled.
 
-5. IF MUSE ASKS FOR THE ACCESS KEY
+5. IF MUSE NEEDS FULL COMPUTER ACCESS
+Muse can request Full Computer Mode. Your Mac will show an approval dialog. If you approve it, the running connector switches immediately — no config edit or restart.
+
+6. IF MUSE ASKS FOR THE ACCESS KEY
 Click the menu-bar circle, choose Copy Muse Access Key, and paste it only into Muse's secure credential field. Do not paste the key into normal chat.
 
 IF YOU RESTART OR THE CONNECTION BREAKS
@@ -150,8 +153,8 @@ class ConnectorApp(rumps.App):
             "- Read /capabilities before deciding a Mac task cannot be done.\n"
             "- Combine advertised actions as needed to complete multi-step work.\n"
             "- Do not ask me to paste Terminal commands, installers, or scripts as a substitute for connector actions.\n"
-            "- Do not request secrets or credentials from other apps or from macOS Keychain.\n"
-            "- If an action is not advertised, state the missing capability instead of inventing a workaround.\n\n"
+            "- Do not extract credentials from other apps or Keychain without explicit user-directed need and local approval.\n"
+            "- Request access.enable_full if broader authority is needed; it requires local approval. In Full Mode, surface OS permission needs and use general commands and UI primitives autonomously.\n\n"
             "Use this connector only when I explicitly ask you to work with my Mac."
         )
 
@@ -204,38 +207,28 @@ class ConnectorApp(rumps.App):
         self._show_first_run = False
 
     def show_capability_index(self, _):
-        from mac_agent.capabilities import describe
-        from mac_agent.config import load_config
-
-        cfg = load_config()
-        lines = [f"Mode: {cfg.get('mode', 'restricted')}", ""]
-        for name, spec in describe(cfg).items():
-            status = "ON" if spec["enabled"] else "off"
-            lines.append(f"{name}: {status} — {spec['description']}")
-        lines.append("\nMuse reads the machine-readable version automatically from GET /capabilities.")
-        rumps.alert(title="Muse Mac Connector — Capability Index", message="\n".join(lines), ok="Done")
+        try:
+            index = self.agent.capabilities(self.token)
+            lines = [f"Mode: {index['mode']}",
+                     f"Filesystem: {index.get('filesystem_scope', 'unknown')}",
+                     f"Commands: {index.get('command_execution', 'unknown')}", ""]
+            for name, spec in index["packs"].items():
+                status = "ON" if spec["enabled"] else "off"
+                lines.append(f"{name}: {status} — {spec['description']}")
+            message = "\n".join(lines)
+        except (OSError, ValueError, KeyError) as exc:
+            message = f"Cannot read the running helper's capability index: {exc}"
+        rumps.alert(title="Muse Mac Connector — Capability Index", message=message, ok="Done")
 
     def enable_full_computer_mode(self, _):
-        answer = rumps.alert(
-            title="Enable Full Computer Mode?",
-            message=(
-                "This enables every connector capability pack: files, developer commands, processes, apps, "
-                "clipboard, screen capture, UI control, Shortcuts, web URLs, scripts, and settings.\n\n"
-                "Files and commands still stay inside the configured working folders. macOS separately controls "
-                "Accessibility and Screen Recording. Destructive file trash and settings changes still require approval."
-            ),
-            ok="Enable Full Mode",
-            cancel="Cancel",
-        )
-        if answer != 1:
-            return
-        from mac_agent.config import enable_packs
-
-        enable_packs(["all"])
-        self.agent.stop()
-        self.agent.start(self.token)
+        # The helper presents the full authority explanation and local approval dialog.
+        # Use the same transition as Muse; do not leave a saved/live config mismatch.
+        result = self.agent.enable_full_mode(self.token)
         self._refresh()
-        self._notify("Full Computer Mode enabled. Muse can now see the complete capability index.")
+        if result.get("ok"):
+            self._notify("Full Computer Mode enabled and verified: user-accessible files, general commands and installed apps.")
+        else:
+            rumps.alert(title="Full Computer Mode", message=result.get("error", "Activation failed."), ok="Done")
 
     def _open_privacy_pane(self, pane: str, label: str) -> None:
         url = PRIVACY_PANES[pane]
@@ -245,11 +238,12 @@ class ConnectorApp(rumps.App):
     def copy_permissions_guide(self, _):
         guide = (
             "Muse Mac Connector permissions guide\n\n"
-            "Default features do not require Full Disk Access. macOS may request Files & Folders "
-            "or Automation access as features are used. Full Disk Access, Accessibility, and Screen "
-            "Recording are optional advanced permissions and should only be enabled when you want "
-            "capabilities that need them. The connector cannot silently grant these permissions.\n\n"
-            "Use Advanced Setup > Open Config File to choose which folders and actions Muse may request."
+            "Restricted Mode limits file work to configured folders. Full Computer Mode removes those "
+            "connector folder fences and lets Muse work anywhere your logged-in Mac account can access.\n\n"
+            "macOS still controls protected data and app control. Full Disk Access may be needed for protected "
+            "files; Accessibility is needed for clicking/typing; Screen Recording is needed for visual inspection; "
+            "and Automation permissions may appear when controlling apps. The connector cannot silently grant "
+            "those macOS permissions."
         )
         self._copy(guide)
         self._notify("Permissions guide copied.")

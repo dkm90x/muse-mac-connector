@@ -21,7 +21,11 @@ from .http_api import serve as serve_http
 
 def _print_capabilities(cfg: dict) -> None:
     print(f"Mode: {cfg.get('mode', 'restricted')}")
-    print(f"Working roots: {', '.join(cfg.get('allowed_roots', []))}")
+    if cfg.get("mode") == "full":
+        print("Filesystem: user_accessible; commands: general; OS permissions and high-risk approvals apply.")
+    else:
+        print(f"Working roots: {', '.join(cfg.get('allowed_roots', []))}")
+    print("Access request: access.enable_full (explicit local approval)")
     print()
     for name, item in describe(cfg).items():
         status = "ENABLED" if item["enabled"] else "disabled"
@@ -52,7 +56,7 @@ def _doctor(cfg: dict) -> int:
             print(f"accessibility  {'READY' if access.get('enabled') else 'needs approval'}")
         except Exception as exc:  # noqa: BLE001
             print(f"accessibility  check failed  {exc}")
-    for root in cfg.get("allowed_roots", []):
+    for root in ([] if cfg.get("mode") == "full" else cfg.get("allowed_roots", [])):
         print(f"root           {'READY' if Path(root).exists() else 'missing'}  {root}")
     return 0
 
@@ -92,6 +96,12 @@ def main(argv: list[str] | None = None) -> int:
             print("Choose one or more capability packs, or: muse-mac enable all", file=sys.stderr)
             print("Available: " + ", ".join(FULL_OPERATOR_PACKS), file=sys.stderr)
             return 2
+        if "all" in targets:
+            from .actions import _confirm_action
+            from .config import FULL_MODE_CONSENT
+            if not _confirm_action("access.enable_full", {"request": FULL_MODE_CONSENT}):
+                print("Full Computer Mode was not enabled.", file=sys.stderr)
+                return 1
         try:
             cfg = enable_packs(targets, args.config)
         except ValueError as exc:
@@ -99,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print("Enabled Full Computer Mode." if cfg.get("mode") == "full" else "Capabilities enabled.")
         _print_capabilities(cfg)
-        print("\nRestart Muse Mac Connector for changes to take effect.")
+        print("\nSaved. If a separate helper is already running, reopen the app to reload manual CLI configuration. Muse/menu Full Mode requests apply live without restart.")
         return 0
 
     if args.init:

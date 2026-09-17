@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import tempfile
+import threading
 from pathlib import Path
 
 import yaml
@@ -30,6 +32,30 @@ DEFAULTS = {
 # Full Computer Mode is an explicit opt-in. Reversible/destructive operations still
 # keep a local confirmation gate; ordinary development operations can run unattended.
 FULL_OPERATOR_CONFIRM_ACTIONS = ["files.trash", "settings.defaults"]
+CONFIG_LOCK = threading.RLock()
+
+FULL_MODE_CONSENT = (
+    "Enable Full Computer Mode? Muse will be able to read, write, create, move and trash files "
+    "anywhere your Mac account can access, run general Terminal commands, manage processes, "
+    "operate installed apps, and use screen, keyboard, mouse and clipboard autonomously. "
+    "Configured working folders will no longer limit access. macOS permissions, admin/password "
+    "prompts and SIP/TCC still apply. Destructive, privileged and credential-sensitive commands "
+    "still require local approval. Only allow this if you trust the connected agent."
+)
+
+
+def full_mode_config(cfg: dict) -> dict:
+    return {**cfg, "mode": "full", "enabled_packs": list(FULL_OPERATOR_PACKS),
+            "allowed_actions": actions_for_packs(FULL_OPERATOR_PACKS),
+            "confirm_actions": list(FULL_OPERATOR_CONFIRM_ACTIONS)}
+
+
+def apply_full_mode(cfg: dict) -> None:
+    """Persist before mutating the shared config. Caller must obtain local consent."""
+    with CONFIG_LOCK:
+        updated = full_mode_config(cfg)
+        save_config(updated, cfg.get("_config_path"))
+        cfg.update(updated)
 
 
 def _expand(value: str) -> str:
@@ -61,6 +87,7 @@ def load_config(path: str | None = None) -> dict:
     cfg["allowed_roots"] = [_expand(str(p)) for p in cfg.get("allowed_roots", [])]
     cfg["allowed_actions"] = [str(a) for a in cfg.get("allowed_actions", [])]
     cfg["confirm_actions"] = [str(a) for a in cfg.get("confirm_actions", [])]
+    cfg["_config_path"] = str(cfg_path.absolute())
     return cfg
 
 
@@ -74,20 +101,24 @@ def save_config(cfg: dict, path: str | None = None) -> Path:
         "allowed_actions": list(cfg.get("allowed_actions", [])),
         "confirm_actions": list(cfg.get("confirm_actions", [])),
         "scripts_dir": cfg.get("scripts_dir", DEFAULTS["scripts_dir"]),
+        "base_dir": cfg.get("base_dir", DEFAULTS["base_dir"]),
     }
-    with destination.open("w") as handle:
-        yaml.safe_dump(payload, handle, default_flow_style=False, sort_keys=False)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=destination.parent, delete=False) as handle:
+            temporary = handle.name
+            yaml.safe_dump(payload, handle, default_flow_style=False, sort_keys=False)
+        os.replace(temporary, destination)
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
     return destination
 
 
 def enable_packs(packs: list[str], path: str | None = None) -> dict:
     cfg = load_config(path)
     if packs == ["all"] or "all" in packs:
-        selected = list(FULL_OPERATOR_PACKS)
-        cfg["mode"] = "full"
-        cfg["enabled_packs"] = selected
-        cfg["allowed_actions"] = actions_for_packs(selected)
-        cfg["confirm_actions"] = [a for a in FULL_OPERATOR_CONFIRM_ACTIONS if a in cfg["allowed_actions"]]
+        cfg = full_mode_config(cfg)
     else:
         selected = list(cfg.get("enabled_packs", []))
         for pack in packs:
