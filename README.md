@@ -1,110 +1,115 @@
 # Muse Mac Connector
 
-> **Give Meta Muse hands on your Mac — without giving it unchecked access.**
+> **Give Meta Muse hands on your Mac — while keeping the Mac owner in control.**
 
-[![Version](https://img.shields.io/badge/version-0.4.3--alpha-blue)](#status)
+[![Version](https://img.shields.io/badge/version-0.5.0--alpha-blue)](#status)
 [![macOS](https://img.shields.io/badge/platform-macOS-black)](#requirements)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Security](https://img.shields.io/badge/security-local%20approval-important)](SECURITY.md)
 
-Muse Mac Connector is an open-source macOS menu-bar app that lets **Meta Muse request user-approved actions on your own Mac** through an authenticated local capability service and an outbound Cloudflare tunnel.
+Muse Mac Connector is a free, open-source macOS menu-bar app that gives Meta Muse a secure, authenticated set of tools for working on your Mac.
 
-It is intentionally built around a simple rule:
+**Unofficial community project. Not affiliated with or endorsed by Meta.**
 
-**The AI can request. The Mac owner decides.**
+## The simple version
 
-> **Unofficial community project.** Not affiliated with, endorsed by, or maintained by Meta.
+1. Download **Muse Mac Connector** from GitHub Releases.
+2. Open the app. A small circle appears in the Mac menu bar.
+3. Wait for **Ready**. The app creates a free Cloudflare Quick Tunnel and copies the current Muse setup automatically.
+4. Open Muse and press **Command-V**.
+5. If Muse asks for the access key through its secure credential flow, use **Copy Muse Access Key** from the menu-bar app.
 
-## Why I built it
+If the Mac restarts or the free tunnel changes, open the app again. It reconnects and copies the new setup automatically. **Open → paste → continue.**
 
-Meta Muse can reason in the cloud, but I wanted it to safely act on my actual computer — move a file, run a Shortcut, open something, or trigger a script — without handing an AI unrestricted control of the machine.
-Instead of building a remote-control backdoor, I built a **capability broker**:
-
-```mermaid
-flowchart LR
-    M[Meta Muse] -->|HTTPS + bearer auth| C[Cloudflare Tunnel]
-    C --> A[Muse Mac Connector]
-    A -->|localhost only| H[Authenticated Mac Agent]
-    H --> P{Local approval required?}
-    P -->|Allow| X[Requested macOS action]
-    P -->|Deny| D[Request blocked]
-```
-
-The connector exposes only configured capabilities, stores its access key locally, and requires on-device confirmation for every default action.
-
-## What it demonstrates
-
-This project is also a practical exploration of agent infrastructure and human-in-the-loop security:
-
-- Designing a narrow capability layer instead of unrestricted computer access.
-- Secure local secret storage with macOS Keychain.
-- Authenticated HTTP APIs and timing-safe credential comparison.
-- Filesystem sandboxing with configurable allowed roots.
-- Local approval gates for AI-requested actions.
-- Process supervision and automatic recovery for local services and tunnels.
-- Packaging Python services into a clickable macOS menu-bar application.
-- Building the product so paths, accounts, credentials, and configuration belong to **the person who installs it**, not the developer.
 ## Status
 
-**v0.4.3 alpha — working free/DIY edition.**
+**v0.5.0 alpha — Computer Operator edition.**
 
-The current free edition uses a Cloudflare Quick Tunnel. Quick Tunnel addresses can change after a restart, so the connector always exposes the current connection details and can restart a failed tunnel automatically.
+v0.5 adds a machine-readable capability index and an optional **Full Computer Mode** so Muse can combine small Mac actions into larger multi-step jobs instead of relying on one hard-coded workflow per task.
 
-The app now supports a true Finder-style launch: open **Muse Mac Connector.app** and it starts the menu-bar UI, bundled Mac agent helper, and bundled `cloudflared` process automatically.
+The downloadable build is currently ad-hoc signed, not Apple Developer ID signed/notarized. macOS may show an extra Gatekeeper warning. If that happens, use Finder's **Open** command or the **Open Anyway** option in Privacy & Security after verifying you downloaded it from this repository.
 
-The connector also publishes a behavior contract through `/capabilities`: when the user says to use the Mac, the AI should use the connector directly, avoid Terminal-install workarounds, and clearly report any missing capability instead of inventing one.
+## What v0.5 can do
 
-### Distribution note
+When enabled, the capability index exposes 11 capability packs and 25 actions:
 
-The code and local build are ready for public use, but downloadable release artifacts are **not yet Developer ID signed or notarized by Apple**. That does not affect the MIT source release, but macOS may show additional Gatekeeper friction for an unsigned download.
+- **Files:** list, read, write, create folders, move, copy, and trash files inside configured working folders.
+- **Developer commands:** run guarded developer commands without a raw shell interpreter.
+- **Processes:** start, inspect, read output from, and stop long-running processes.
+- **Apps:** launch installed macOS applications.
+- **Clipboard:** read and write the clipboard.
+- **Screen:** capture the display for visual inspection.
+- **UI:** inspect the frontmost app, activate apps, click, type, and press keys/hotkeys.
+- **Shortcuts:** run Apple Shortcuts by name.
+- **Web:** open HTTP(S) URLs.
+- **Scripts:** run executable scripts intentionally placed in the connector scripts folder.
+- **Settings:** change explicitly requested macOS defaults string values.
 
-The project is currently self-funded. If it begins generating revenue or voluntary support, the first distribution milestone is to use that money for the Apple Developer Program so releases can be Developer ID signed and notarized.
+Muse discovers the machine-readable version at `GET /capabilities`, including parameter schemas, enabled state, confirmation requirements, working roots, and behavior policy.
 
-## Security-first defaults
+## Full Computer Mode
 
-- Local API binds only to `127.0.0.1:8899`.
-- Remote access uses an outbound HTTPS Cloudflare tunnel.
-- Every API request requires a randomly generated 256-bit bearer key.
-- The key is stored in the current Mac user's Keychain when available.
-- Every default Mac action requires an on-device confirmation.
-- File actions are limited to Downloads, Desktop, and Documents by default.
-- **Pause Agent** immediately blocks new action requests.
-- Request bodies are size-limited and results are held only in bounded memory.
-- No analytics, telemetry, folder watching, project-owned backend, or background uploading.
-## Current capabilities
+The connector starts conservatively. To expose the complete capability index:
 
-Muse can request the following actions when they are enabled in configuration:
+1. Click the menu-bar circle.
+2. Choose **Enable Full Computer Mode**.
+3. Read the explanation and approve it.
 
-- Run an Apple Shortcut.
-- Move or copy files inside configured folders.
-- Change a macOS `defaults` string value.
-- Open an HTTP(S) URL.
-- Run an executable script deliberately placed in the connector's scripts folder.
+Full Computer Mode enables every connector capability pack. It does **not** bypass macOS privacy controls. Accessibility and Screen Recording still require explicit approval in System Settings. Files and developer commands remain bounded to configured working folders, and destructive file trash / settings changes keep a confirmation gate.
 
-Nothing points at the original developer's files or accounts. Paths beginning with `~` resolve to the Mac user who installed the connector.
+You can inspect what is currently available at any time with **Capability Index** in the menu.
 
 ## Menu-bar controls
 
-- **Connect to Muse** — opens Muse and copies the current connection setup.
-- **Copy Muse Access Key** — copies the Keychain-backed key for 60 seconds.
-- **Permissions & Capabilities** — explains optional macOS permissions and links to System Settings.
-- **Advanced Setup** — opens the per-user config, scripts folder, or connector data folder.
-- **Restart Tunnel** — creates a fresh Quick Tunnel.
-- **Pause Agent** — blocks new action requests without closing the app.
-- **Stop Connector** — stops the local agent and tunnel.
-- **Quit Connector** — cleanly shuts down the full process tree.
+- **How to Use — Easy Steps** — the plain-language setup instructions.
+- **Capability Index** — shows the current capability packs and enabled state.
+- **Enable Full Computer Mode** — explicit opt-in to all capability packs.
+- **Connect to Muse** — opens Muse and copies the current setup when ready.
+- **Reconnect & Copy Setup** — creates a fresh Quick Tunnel and copies the replacement setup.
+- **Copy Connection Setup** — copies the current Muse setup.
+- **Copy Muse Access Key** — copies the Keychain-backed access key temporarily.
+- **Permissions & Capabilities** — opens the relevant macOS permission settings.
+- **Advanced Setup** — opens config, scripts, and connector data locations.
+- **Pause Agent** — blocks new requested actions without quitting the app.
+- **Stop Connector / Quit Connector** — stops the local services cleanly.
 
-The app supervises its helper services and requires a real `/health` response before treating the local agent as healthy.
+Opening the already-running `.app` again is intentionally useful: it refreshes the Quick Tunnel and copies the new connection setup.
+
+## How it works
+
+```mermaid
+flowchart LR
+    M[Meta Muse] -->|HTTPS + bearer auth| C[Cloudflare Quick Tunnel]
+    C --> A[Muse Mac Connector on your Mac]
+    A --> I[Capability Index]
+    I --> F[Files / Dev / Processes]
+    I --> U[Apps / Clipboard / Screen / UI]
+    I --> S[Shortcuts / Web / Scripts / Settings]
+```
+
+The AI runs in the cloud. The actual computer actions run on your Mac. The free edition uses an outbound Cloudflare Quick Tunnel, so you do not need to buy a domain, configure DNS, or expose a router port.
+
+## Security model
+
+- Local API binds to `127.0.0.1:8899`.
+- Remote access uses an outbound HTTPS Cloudflare tunnel.
+- Every request requires a randomly generated 256-bit bearer key.
+- The key is stored in the current user's macOS Keychain when available.
+- File operations are bounded to configured roots; defaults are Desktop, Documents, and Downloads.
+- Developer command execution rejects shell chaining/redirection and selected privilege/credential-oriented executables.
+- Full Computer Mode is explicit opt-in.
+- macOS Accessibility and Screen Recording permissions remain under macOS control.
+- **Pause Agent** immediately blocks new requests.
+- No analytics, telemetry, folder watching, or project-owned backend.
+
+See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md). This is an alpha and has not undergone an independent security audit.
+
 ## Requirements
 
-For the source/build workflow:
+For the downloadable app: macOS.
 
-- macOS
-- Python 3
-- Homebrew
-- `cloudflared`
+For source builds: macOS, Python 3, Homebrew, and `cloudflared`.
 
-## Build the clickable Mac app
+## Build from source
 
 ```bash
 git clone https://github.com/dkm90x/muse-mac-connector.git
@@ -113,15 +118,14 @@ cd muse-mac-connector
 ./build-app.sh
 ```
 
-The application is created at:
+The standalone app is created at:
 
 ```text
 dist/Muse Mac Connector.app
 ```
 
-The build bundles its Python runtime/dependencies and `cloudflared`, so the resulting app launches by clicking the icon rather than requiring a startup command.
+The build bundles its Python runtime/dependencies and `cloudflared`, so users do not need to run a startup command.
 
-Local builds are ad-hoc signed. `release-macos.sh` contains the Developer ID signing, DMG, notarization, stapling, and Gatekeeper verification pipeline for a future signed release.
 ## Run from source
 
 ```bash
@@ -129,66 +133,40 @@ Local builds are ad-hoc signed. `release-macos.sh` contains the Developer ID sig
 ./start-secure.sh
 ```
 
-Source mode remains available for development, auditing, and users who prefer not to run a packaged build.
+Useful local commands:
 
-## Connect Muse
-
-1. Launch **Muse Mac Connector**.
-2. Click the menu-bar circle and choose **Connect to Muse**.
-3. Paste the copied setup message into Muse.
-4. If Muse requests the credential through its secure credentials UI, choose **Copy Muse Access Key**.
-5. Approve or deny requested Mac actions locally.
-
-Never paste the access key into ordinary chat, a GitHub issue, a log, or source code.
+```bash
+muse-mac capabilities
+muse-mac doctor
+muse-mac enable all
+```
 
 ## Configuration
 
-Choose **Advanced Setup → Open Config File** to create/open:
+Choose **Advanced Setup → Open Config File** to edit:
 
 ```text
 ~/Library/Application Support/Muse Mac Connector/config.yaml
 ```
 
-Configuration controls allowed filesystem roots, enabled actions, and which actions require local confirmation. Changes apply after restarting the connector.
+Configuration controls working roots, enabled capabilities, and confirmation requirements. Restart the connector after manual config changes.
+
 ## Project structure
 
 ```text
-connector/      menu-bar app, process supervision, Keychain integration
-mac_agent/      authenticated localhost API and guarded Mac actions
-tests/          security and public-hygiene tests
+connector/      menu-bar app, tunnel/process supervision, Keychain integration
+mac_agent/      authenticated HTTP API, capability registry, guarded Mac actions
+tests/          operator, security, and public-hygiene tests
 build-app.sh    standalone .app build pipeline
-release-macos.sh future Developer ID + notarized DMG release pipeline
+release-macos.sh Developer ID/notarization pipeline for a future signed release
 ```
 
-## Roadmap
+## Free edition and future hosted option
 
-The free MIT edition will remain usable as a self-managed connector.
-
-Near-term priorities:
-
-- Publish and harden the free alpha with real-world feedback.
-- Improve first-run onboarding and diagnostics.
-- Add signed/notarized distribution when project revenue can cover the Apple Developer Program.
-- Explore an optional managed edition with a stable hostname and zero tunnel maintenance while keeping the local security model intact.
-
-A paid service, if built, would monetize **convenience and managed infrastructure**, not basic security controls or access to the source.
-
-## About the developer
-
-Built by **Jordan (@dkm90x)** as an independent project at the intersection of AI agents, automation, product design, and human-in-the-loop security.
-
-The project started from a practical question: *what is the smallest secure layer needed to let a cloud AI do useful work on a personal computer while leaving the human in control?*
-## Security and privacy
-
-Before widening access, read:
-
-- [SECURITY.md](SECURITY.md)
-- [PRIVACY.md](PRIVACY.md)
-
-This is an alpha developer preview and has not undergone an independent security audit.
+The MIT free edition stays self-managed and uses free Cloudflare Quick Tunnels. A future hosted option may provide a stable endpoint and managed relay infrastructure; it would charge for convenience/infrastructure, not for access to the source or basic security controls.
 
 ## License
 
 Released under the **MIT License**. See [LICENSE](LICENSE).
 
-Contributions, testing, issue reports, and security-minded review are welcome.
+Built by **Jordan (@dkm90x)**. Contributions, testing, issue reports, and security-minded review are welcome.

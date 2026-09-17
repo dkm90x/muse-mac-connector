@@ -1,11 +1,23 @@
+# Changelog
+
+## 0.5.0-alpha — 2026-09-16
+
+- Added a shared machine-readable capability registry with 11 packs and 25 actions.
+- Added Full Computer Mode with an explicit user opt-in and bounded working roots.
+- Added file read/write/list/mkdir/trash, guarded developer command execution, process supervision, app launch, clipboard, screen capture, and Accessibility UI primitives.
+- Added `muse-mac capabilities`, `muse-mac enable all`, and `muse-mac doctor`.
+- Added first-run plain-language onboarding and a permanent **How to Use — Easy Steps** menu.
+- Added **Capability Index** and **Enable Full Computer Mode** menu controls.
+- Opening the already-running app now refreshes the Quick Tunnel and automatically copies the new Muse connection setup.
+- Kept destructive file trash and settings changes behind local confirmation in Full Computer Mode.
+- Verified the packaged app on macOS with the operator/security test suite and live Quick Tunnel health/action checks.
+
 ## 0.4.3 — 2026-09-15
 
 - Added a connector behavior contract for AI clients.
 - `GET /capabilities` now includes usage policy alongside action schemas.
 - AI clients are told to use advertised connector actions instead of requesting Terminal installers or setup workarounds.
 - Missing capabilities must be reported explicitly rather than replaced with improvised access methods.
-
-# Changelog
 
 ## v0.4.2 — 2026-09-15
 

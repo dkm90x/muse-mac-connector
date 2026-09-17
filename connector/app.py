@@ -93,6 +93,8 @@ class ConnectorApp(rumps.App):
             rumps.MenuItem("Status", callback=None),
             None,
             rumps.MenuItem("How to Use — Easy Steps", callback=self.show_how_to_use),
+            rumps.MenuItem("Capability Index", callback=self.show_capability_index),
+            rumps.MenuItem("Enable Full Computer Mode", callback=self.enable_full_computer_mode),
             rumps.MenuItem("Connect to Muse", callback=self.connect_muse),
             rumps.MenuItem("Reconnect & Copy Setup", callback=self.restart_tunnel),
             rumps.MenuItem("Copy Connection Setup", callback=self.copy_connection_prompt),
@@ -200,6 +202,40 @@ class ConnectorApp(rumps.App):
         except OSError:
             pass
         self._show_first_run = False
+
+    def show_capability_index(self, _):
+        from mac_agent.capabilities import describe
+        from mac_agent.config import load_config
+
+        cfg = load_config()
+        lines = [f"Mode: {cfg.get('mode', 'restricted')}", ""]
+        for name, spec in describe(cfg).items():
+            status = "ON" if spec["enabled"] else "off"
+            lines.append(f"{name}: {status} — {spec['description']}")
+        lines.append("\nMuse reads the machine-readable version automatically from GET /capabilities.")
+        rumps.alert(title="Muse Mac Connector — Capability Index", message="\n".join(lines), ok="Done")
+
+    def enable_full_computer_mode(self, _):
+        answer = rumps.alert(
+            title="Enable Full Computer Mode?",
+            message=(
+                "This enables every connector capability pack: files, developer commands, processes, apps, "
+                "clipboard, screen capture, UI control, Shortcuts, web URLs, scripts, and settings.\n\n"
+                "Files and commands still stay inside the configured working folders. macOS separately controls "
+                "Accessibility and Screen Recording. Destructive file trash and settings changes still require approval."
+            ),
+            ok="Enable Full Mode",
+            cancel="Cancel",
+        )
+        if answer != 1:
+            return
+        from mac_agent.config import enable_packs
+
+        enable_packs(["all"])
+        self.agent.stop()
+        self.agent.start(self.token)
+        self._refresh()
+        self._notify("Full Computer Mode enabled. Muse can now see the complete capability index.")
 
     def _open_privacy_pane(self, pane: str, label: str) -> None:
         url = PRIVACY_PANES[pane]
