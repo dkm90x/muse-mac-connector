@@ -7,6 +7,7 @@ import time
 import webbrowser
 
 import rumps
+from rumps import rumps as _rumps_impl
 
 from . import __version__, config
 from .agent_mgr import AgentManager
@@ -37,6 +38,24 @@ Open Muse Mac Connector again, or choose Reconnect & Copy Setup from the menu. W
 
 You do not need to set up Cloudflare, buy a domain, run Terminal commands, or remember a URL."""
 
+def _handle_application_reopen(delegate, ns_app, has_visible_windows):
+    """Treat reopening the already-running .app as reconnect-and-copy."""
+    state = getattr(delegate, "_app", {})
+    callback = state.get("_reopen_callback") if isinstance(state, dict) else None
+    if callback:
+        callback()
+    return True
+
+
+# rumps does not implement this native macOS reopen delegate method itself.
+# Registering it makes a second Finder/open launch useful instead of a no-op.
+setattr(
+    _rumps_impl.NSApp,
+    "applicationShouldHandleReopen_hasVisibleWindows_",
+    _handle_application_reopen,
+)
+
+
 PRIVACY_PANES = {
     "files": "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
     "full_disk": "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
@@ -55,6 +74,7 @@ class ConnectorApp(rumps.App):
         self._copy_when_ready = True
         self._open_muse_when_ready = False
         self._show_first_run = not ONBOARDING_MARKER.exists()
+        self._reopen_callback = self._handle_app_reopen
 
         permissions = rumps.MenuItem("Permissions & Capabilities")
         permissions.add(rumps.MenuItem("About Permissions", callback=self.copy_permissions_guide))
@@ -152,6 +172,11 @@ class ConnectorApp(rumps.App):
         self._open_muse_when_ready = False
         self._notify("Ready — Muse connection setup copied. Open Muse and press Command-V.")
         return True
+
+    def _handle_app_reopen(self) -> None:
+        # Double-clicking/opening the app again means: refresh the Quick Tunnel
+        # and copy the new Muse setup when the replacement URL is ready.
+        self.restart_tunnel(None)
 
     def _clear_access_key_later(self) -> None:
         token = self.token
@@ -290,7 +315,9 @@ class ConnectorApp(rumps.App):
         self._ensure_services()
         self._refresh()
         self._finish_connection_copy_if_ready()
-        if self._show_first_run:
+        # Do not show a modal first-run dialog until the tunnel is ready.
+        # Otherwise the dialog blocks the timer before the setup reaches the clipboard.
+        if self._show_first_run and self.tunnel.public_url:
             self.show_how_to_use(None)
 
 
