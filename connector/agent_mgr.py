@@ -55,6 +55,39 @@ class AgentManager:
         token = token or config.ensure_agent_token()
         return self._health(token)
 
+    def _request(self, path: str, token: str, payload: dict | None = None) -> dict:
+        headers = {"Authorization": f"Bearer {token}"}
+        data = None
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(payload).encode()
+        request = urllib.request.Request(config.AGENT_URL + path, data=data, headers=headers)
+        with urllib.request.urlopen(request, timeout=130 if payload else 5) as response:
+            return json.loads(response.read())
+
+    def capabilities(self, token: str) -> dict:
+        return self._request("/capabilities", token)
+
+    def enable_full_mode(self, token: str) -> dict:
+        """Ask the running helper for local consent, then verify its live authority."""
+        try:
+            if not self.is_running(token) and not self.start(token):
+                return {"ok": False, "error": "Could not start the Mac helper."}
+            index = self.capabilities(token)
+            if "access.enable_full" not in index.get("actions", {}):
+                return {"ok": False, "error": "Running helper does not support live Full Mode activation. Update/reopen the connector."}
+            task = self._request("/task", token, {"action": "access.enable_full", "params": {}})
+            result = self._request("/result/" + task["task_id"], token).get("result", {})
+            if not result.get("ok"):
+                return result
+            index = self.capabilities(token)
+            if (index.get("mode") != "full" or index.get("filesystem_scope") != "user_accessible"
+                    or index.get("command_execution") != "general"):
+                return {"ok": False, "error": "Helper did not report Full Mode authority; activation was not verified."}
+            return {"ok": True}
+        except (OSError, ValueError, KeyError) as exc:
+            return {"ok": False, "error": f"Could not verify Full Mode: {exc}"}
+
     def _stop_stale_process(self) -> None:
         pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else self._read_pid()
         if pid and self._pid_is_agent(pid):
