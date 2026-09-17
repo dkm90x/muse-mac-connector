@@ -13,6 +13,29 @@ from .agent_mgr import AgentManager
 from .tunnel_mgr import TunnelManager
 
 MUSE_CHAT_URL = "https://muse.ai"
+ONBOARDING_MARKER = config.APP_SUPPORT_DIR / "onboarding-v0.5-shown"
+
+HOW_TO_USE = """You only need to remember one thing: open the app, then paste into Muse.
+
+1. OPEN MUSE MAC CONNECTOR
+Double-click Muse Mac Connector.app. Look for the small circle in the top menu bar. The app starts your Mac connection for you.
+
+2. WAIT FOR READY
+The connector creates your free Cloudflare connection automatically. When it is ready, the Muse setup is copied to your clipboard automatically.
+
+3. OPEN MUSE
+Choose Connect to Muse from the menu if you want the app to open Muse for you.
+
+4. PASTE
+In Muse, press Command-V and send the copied setup. Muse can then read the connector's capability index and use the Mac tools you have enabled.
+
+5. IF MUSE ASKS FOR THE ACCESS KEY
+Click the menu-bar circle, choose Copy Muse Access Key, and paste it only into Muse's secure credential field. Do not paste the key into normal chat.
+
+IF YOU RESTART OR THE CONNECTION BREAKS
+Open Muse Mac Connector again, or choose Reconnect & Copy Setup from the menu. Wait for the Ready notification, then paste into Muse. That's it.
+
+You do not need to set up Cloudflare, buy a domain, run Terminal commands, or remember a URL."""
 
 PRIVACY_PANES = {
     "files": "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
@@ -29,6 +52,10 @@ class ConnectorApp(rumps.App):
         self.agent = AgentManager()
         self.tunnel = TunnelManager()
         self.token = config.ensure_agent_token()
+        self._copy_when_ready = True
+        self._open_muse_when_ready = False
+        self._show_first_run = not ONBOARDING_MARKER.exists()
+
         permissions = rumps.MenuItem("Permissions & Capabilities")
         permissions.add(rumps.MenuItem("About Permissions", callback=self.copy_permissions_guide))
         permissions.add(rumps.MenuItem("Open Files & Folders Settings", callback=self.open_files_permissions))
@@ -45,15 +72,16 @@ class ConnectorApp(rumps.App):
         self.menu = [
             rumps.MenuItem("Status", callback=None),
             None,
+            rumps.MenuItem("How to Use — Easy Steps", callback=self.show_how_to_use),
             rumps.MenuItem("Connect to Muse", callback=self.connect_muse),
-            rumps.MenuItem("Copy Connection Prompt", callback=self.copy_connection_prompt),
+            rumps.MenuItem("Reconnect & Copy Setup", callback=self.restart_tunnel),
+            rumps.MenuItem("Copy Connection Setup", callback=self.copy_connection_prompt),
             rumps.MenuItem("Copy Muse Access Key", callback=self.copy_access_key),
             permissions,
             advanced,
             None,
             rumps.MenuItem("Start Connector", callback=self.start_connector),
             rumps.MenuItem("Stop Connector", callback=self.stop_connector),
-            rumps.MenuItem("Restart Tunnel", callback=self.restart_tunnel),
             rumps.MenuItem("Copy Tunnel URL", callback=self.copy_url),
             None,
             rumps.MenuItem("Pause Agent", callback=self.toggle_pause),
@@ -92,21 +120,38 @@ class ConnectorApp(rumps.App):
             "credentials flow; do not ask me to paste the key into chat.\n\n"
             "API:\n"
             "- GET /health verifies the connector.\n"
-            "- GET /capabilities returns allowed actions and whether confirmation is required.\n"
+            "- GET /capabilities returns the capability index, action schemas, and current enabled state.\n"
             "- POST /task with JSON {task_id?, action, params} requests an action.\n"
             "- GET /result/<task_id> retrieves a task result.\n\n"
             "Behavior contract:\n"
             "- When I say to use my Mac, use this connector directly.\n"
-            "- Check /capabilities before deciding a Mac task cannot be done.\n"
+            "- Read /capabilities before deciding a Mac task cannot be done.\n"
+            "- Combine advertised actions as needed to complete multi-step work.\n"
             "- Do not ask me to paste Terminal commands, installers, or scripts as a substitute for connector actions.\n"
             "- Do not request secrets or credentials from other apps or from macOS Keychain.\n"
-            "- If an action is not advertised, state the missing capability instead of inventing a workaround.\n"
-            "- Only propose extending the connector if I explicitly ask for a new capability.\n\n"
+            "- If an action is not advertised, state the missing capability instead of inventing a workaround.\n\n"
             "Use this connector only when I explicitly ask you to work with my Mac."
         )
 
     def _copy(self, text: str) -> None:
         subprocess.run(["pbcopy"], input=text.encode(), check=False)
+
+    def _queue_connection_copy(self, *, open_muse: bool = False) -> None:
+        self._ensure_services()
+        self._copy_when_ready = True
+        self._open_muse_when_ready = self._open_muse_when_ready or open_muse
+        self._finish_connection_copy_if_ready()
+
+    def _finish_connection_copy_if_ready(self) -> bool:
+        if not self._copy_when_ready or not self.tunnel.public_url:
+            return False
+        self._copy(self._connection_prompt())
+        if self._open_muse_when_ready:
+            webbrowser.open(MUSE_CHAT_URL)
+        self._copy_when_ready = False
+        self._open_muse_when_ready = False
+        self._notify("Ready — Muse connection setup copied. Open Muse and press Command-V.")
+        return True
 
     def _clear_access_key_later(self) -> None:
         token = self.token
@@ -118,6 +163,18 @@ class ConnectorApp(rumps.App):
                 subprocess.run(["pbcopy"], input=b"", check=False)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def show_how_to_use(self, _):
+        rumps.alert(
+            title="Muse Mac Connector — How to Use",
+            message=HOW_TO_USE,
+            ok="Got it",
+        )
+        try:
+            ONBOARDING_MARKER.write_text("shown\n")
+        except OSError:
+            pass
+        self._show_first_run = False
 
     def _open_privacy_pane(self, pane: str, label: str) -> None:
         url = PRIVACY_PANES[pane]
@@ -168,36 +225,27 @@ class ConnectorApp(rumps.App):
         subprocess.Popen(["open", str(config.APP_SUPPORT_DIR)])
 
     def start_connector(self, _):
-        self._ensure_services()
+        self._queue_connection_copy()
         self._refresh()
-        self._notify("Connector started.")
+        self._notify("Connector starting. Setup will copy automatically when ready.")
 
     def stop_connector(self, _):
         self.tunnel.stop()
         self.agent.stop()
+        self._copy_when_ready = False
+        self._open_muse_when_ready = False
         self._refresh()
         self._notify("Connector stopped.")
 
     def connect_muse(self, _):
-        self._ensure_services()
-        for _ in range(30):
-            if self.tunnel.public_url:
-                break
-            time.sleep(0.5)
+        self._queue_connection_copy(open_muse=True)
         if not self.tunnel.public_url:
-            self._notify("Tunnel is still starting. Try Connect to Muse again.")
-            return
-        self._copy(self._connection_prompt())
-        webbrowser.open(MUSE_CHAT_URL)
-        self._notify("Muse opened. Connection setup copied to the clipboard.")
+            self._notify("Starting your connection. Muse will open and setup will copy when ready.")
 
     def copy_connection_prompt(self, _):
-        self._ensure_services()
+        self._queue_connection_copy()
         if not self.tunnel.public_url:
-            self._notify("No tunnel URL yet.")
-            return
-        self._copy(self._connection_prompt())
-        self._notify("Muse connection setup copied.")
+            self._notify("Starting your connection. Setup will copy automatically when ready.")
 
     def copy_access_key(self, _):
         self._copy(self.token)
@@ -206,10 +254,12 @@ class ConnectorApp(rumps.App):
 
     def restart_tunnel(self, _):
         self.tunnel.stop()
+        self._copy_when_ready = True
+        self._open_muse_when_ready = False
         if self.agent.is_running(self.token) and self.tunnel.start():
-            self._notify("Tunnel restarting. A new Quick Tunnel URL will be created.")
+            self._notify("Reconnecting. The new Muse setup will copy automatically when ready.")
         else:
-            self._notify("Tunnel restart failed. Check the agent log.")
+            self._notify("Reconnect failed. Check the agent log or choose Start Connector.")
         self._refresh()
 
     def copy_url(self, _):
@@ -234,11 +284,14 @@ class ConnectorApp(rumps.App):
         self.agent.stop()
         rumps.quit_application()
 
-    @rumps.timer(5)
+    @rumps.timer(2)
     def _tick(self, _):
         # Recover automatically if the local agent or cloudflared process exits.
         self._ensure_services()
         self._refresh()
+        self._finish_connection_copy_if_ready()
+        if self._show_first_run:
+            self.show_how_to_use(None)
 
 
 def main():
