@@ -27,6 +27,13 @@ DEFAULTS = {
     "allowed_actions": list(DEFAULT_ACTIONS),
     "confirm_actions": list(DEFAULT_ACTIONS),
     "scripts_dir": "~/Library/Application Support/Muse Mac Connector/scripts",
+    "transport_mode": "quick_tunnel",
+    "relay_host": "",
+    "relay_user": "lifeos-relay",
+    "relay_ssh_port": 22,
+    "relay_remote_port": 18899,
+    "relay_public_url": "",
+    "relay_identity_file": "~/.ssh/lifeos_linode_ed25519",
 }
 
 # Full Computer Mode is an explicit opt-in. Reversible/destructive operations still
@@ -87,6 +94,13 @@ def load_config(path: str | None = None) -> dict:
     cfg["allowed_roots"] = [_expand(str(p)) for p in cfg.get("allowed_roots", [])]
     cfg["allowed_actions"] = [str(a) for a in cfg.get("allowed_actions", [])]
     cfg["confirm_actions"] = [str(a) for a in cfg.get("confirm_actions", [])]
+    cfg["transport_mode"] = str(cfg.get("transport_mode", "quick_tunnel"))
+    cfg["relay_host"] = str(cfg.get("relay_host", "")).strip()
+    cfg["relay_user"] = str(cfg.get("relay_user", "lifeos-relay")).strip()
+    cfg["relay_ssh_port"] = int(cfg.get("relay_ssh_port", 22))
+    cfg["relay_remote_port"] = int(cfg.get("relay_remote_port", 18899))
+    cfg["relay_public_url"] = str(cfg.get("relay_public_url", "")).strip().rstrip("/")
+    cfg["relay_identity_file"] = _expand(str(cfg.get("relay_identity_file", DEFAULTS["relay_identity_file"])))
     cfg["_config_path"] = str(cfg_path.absolute())
     return cfg
 
@@ -102,6 +116,13 @@ def save_config(cfg: dict, path: str | None = None) -> Path:
         "confirm_actions": list(cfg.get("confirm_actions", [])),
         "scripts_dir": cfg.get("scripts_dir", DEFAULTS["scripts_dir"]),
         "base_dir": cfg.get("base_dir", DEFAULTS["base_dir"]),
+        "transport_mode": cfg.get("transport_mode", "quick_tunnel"),
+        "relay_host": cfg.get("relay_host", ""),
+        "relay_user": cfg.get("relay_user", "lifeos-relay"),
+        "relay_ssh_port": int(cfg.get("relay_ssh_port", 22)),
+        "relay_remote_port": int(cfg.get("relay_remote_port", 18899)),
+        "relay_public_url": cfg.get("relay_public_url", ""),
+        "relay_identity_file": cfg.get("relay_identity_file", DEFAULTS["relay_identity_file"]),
     }
     temporary = None
     try:

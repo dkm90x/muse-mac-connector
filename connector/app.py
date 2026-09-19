@@ -124,7 +124,7 @@ class ConnectorApp(rumps.App):
     def _ensure_services(self) -> None:
         if not self.agent.is_running():
             self.agent.start(self.token)
-        if self.agent.is_running() and TunnelManager.installed() and not self.tunnel.is_running():
+        if self.agent.is_running() and self.tunnel.installed() and not self.tunnel.is_running():
             self.tunnel.start()
 
     def _refresh(self) -> None:
@@ -341,7 +341,7 @@ class ConnectorApp(rumps.App):
 
     @rumps.timer(2)
     def _tick(self, _):
-        # Recover automatically if the local agent or cloudflared process exits.
+        # Recover automatically if the local agent or outbound transport exits.
         self._ensure_services()
         self._refresh()
         self._finish_connection_copy_if_ready()
