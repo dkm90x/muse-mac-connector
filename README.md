@@ -151,6 +151,16 @@ Choose **Advanced Setup → Open Config File** to edit:
 
 Configuration controls working roots, enabled capabilities, and confirmation requirements. Restart the connector after manual config changes.
 
+### Optional LifeOS bootstrap source
+
+If you use a canonical external operating contract such as LifeOS, put its bootstrap source in:
+
+```text
+~/Library/Application Support/Muse Mac Connector/lifeos-bootstrap-source
+```
+
+The connector then adds only that source pointer to Muse's connection setup. Muse is instructed to load the current source at the start of substantial work rather than storing another copy of the operating rules. `LIFEOS_BOOTSTRAP_SOURCE` can be used instead and takes precedence over the file.
+
 ## Project structure
 
 ```text

@@ -138,12 +138,24 @@ class ConnectorApp(rumps.App):
         self.title = "◉" if self.agent.is_running() and self.tunnel.is_running() else "○"
 
     def _connection_prompt(self) -> str:
+        lifeos_source = config.lifeos_bootstrap_source()
+        lifeos_contract = (
+            "LifeOS Chief-of-Staff bootstrap:\n"
+            f"- Canonical source: {lifeos_source}\n"
+            "- At the start of substantial work, load that source using the matching connected capability "
+            "(files.read for a local path, GitHub for a repository path), then follow the current LifeOS contract.\n"
+            "- Treat LifeOS as canonical. Do not maintain a separate copy of Jordan's operating rules in Muse.\n"
+            "- Refresh the source when starting a new substantial task or when LifeOS may have changed.\n\n"
+            if lifeos_source
+            else ""
+        )
         return (
             "Connect to my Mac as a custom connector named 'My Mac'.\n\n"
             f"Base URL: {self.tunnel.public_url}\n"
             "Authentication: Bearer token. Ask me for the access key through Muse's secure "
             "credentials flow; do not ask me to paste the key into chat.\n\n"
-            "API:\n"
+            + lifeos_contract
+            + "API:\n"
             "- GET /health verifies the connector.\n"
             "- GET /capabilities returns the capability index, action schemas, and current enabled state.\n"
             "- POST /task with JSON {task_id?, action, params} requests an action.\n"
