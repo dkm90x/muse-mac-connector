@@ -14,11 +14,23 @@ FALLBACK_TOKEN_FILE = APP_SUPPORT_DIR / "access-key"
 LEGACY_TOKEN_FILE = HOME / ".mac-connector-token"
 KEYCHAIN_SERVICE = "com.musemacconnector.access-key"
 KEYCHAIN_ACCOUNT = "default"
+LIFEOS_BOOTSTRAP_SOURCE_FILE = APP_SUPPORT_DIR / "lifeos-bootstrap-source"
 
 AGENT_PORT = 8899
 AGENT_URL = f"http://127.0.0.1:{AGENT_PORT}"
 AGENT_MODULE = "mac_agent"
 
+
+
+def lifeos_bootstrap_source() -> str:
+    """Return the optional canonical LifeOS bootstrap source for AI clients."""
+    env_source = os.environ.get("LIFEOS_BOOTSTRAP_SOURCE", "").strip()
+    if env_source:
+        return env_source
+    try:
+        return LIFEOS_BOOTSTRAP_SOURCE_FILE.read_text().strip()
+    except OSError:
+        return ""
 
 def ensure_dirs() -> None:
     APP_SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
