@@ -1,5 +1,10 @@
 # Muse Mac Connector
 
+## Historical status
+
+Built **before Muse released its official Mac app**. That release made this unofficial workaround **obsolete**. The repository and alpha download are retained as a historical integration project; the description below documents its original behavior.
+
+
 > **Give Meta Muse hands on your Mac — while keeping the Mac owner in control.**
 
 [![Version](https://img.shields.io/badge/version-0.5.0--alpha-blue)](#status)
@@ -180,3 +185,7 @@ The MIT free edition stays self-managed and uses free Cloudflare Quick Tunnels. 
 Released under the **MIT License**. See [LICENSE](LICENSE).
 
 Built by **Jordan (@dkm90x)**. Contributions, testing, issue reports, and security-minded review are welcome.
+
+## Why it is built this way
+
+Read [Design decisions and tradeoffs](docs/DESIGN-DECISIONS.md) for the problem, alternatives, architecture, failure modes, evidence, and scope boundaries. This explains the implementation decisions beyond the setup instructions.
